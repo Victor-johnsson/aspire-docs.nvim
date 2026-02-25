@@ -1,0 +1,12 @@
+Loading documentation...
+✔Found 2 results for 'apphost'.
+┌───────────────────────┬──────────────────────┬──────────────────────┬────────┐
+│ Title                 │ Slug                 │ Section              │ Score  │
+├───────────────────────┼──────────────────────┼──────────────────────┼────────┤
+│ What is the AppHost?  │ what-is-the-apphost  │ Defining your        │ 269.25 │
+│                       │                      │ architecture         │        │
+│ Manage the AppHost in │ manage-the-apphost-i │ Use the              │ 141.75 │
+│ tests                 │ n-tests              │ `DistributedApplicat │        │
+│                       │                      │ ionTestingBuilder`   │        │
+│                       │                      │ class                │        │
+└───────────────────────┴──────────────────────┴──────────────────────┴────────┘

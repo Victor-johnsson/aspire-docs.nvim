@@ -1,0 +1,10 @@
+List Items
+----------
+01 | Save the date! | save-the-date |  | Aspire Conf March 23, 9:00 PT Save the date and tune in for our free, livestream event.
+02 | Aspire Community 🤝 | aspire-community |  | Connect with the Aspire team and community across social channels.
+03 | AppHost configuration | apphost-configuration |  | Learn about the Aspire AppHost configuration options.
+
+Search Items
+------------
+01 | What is the AppHost? | what-is-the-apphost | Defining your architecture |
+02 | Manage the AppHost in tests | manage-the-apphost-in-tests | Use the `DistributedApplicationTestingBuilder` class |

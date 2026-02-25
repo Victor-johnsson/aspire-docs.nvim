@@ -1,0 +1,45 @@
+*aspire-docs.nvim* Browse Aspire documentation via CLI
+
+=============================================================================
+INTRODUCTION                                                             *AspireDocs*
+
+aspire-docs.nvim is a minimal Telescope extension that wraps the
+`aspire docs` CLI. It lets you list, search, and open Aspire docs inside
+Neovim.
+
+=============================================================================
+REQUIREMENTS
+
+- Neovim 0.10+ (vim.system)
+- Telescope
+- Aspire CLI on PATH
+
+=============================================================================
+COMMANDS
+
+:AspireDocsList
+  Open the docs list in Telescope.
+
+:AspireDocsSearch {query}
+  Search docs by keyword.
+
+:AspireDocsGet {slug}
+  Open a specific doc page by slug.
+
+=============================================================================
+TELESCOPE
+
+:Telescope aspire_docs list
+:Telescope aspire_docs search query=networking
+
+=============================================================================
+CONFIGURATION
+
+lua << EOF
+require("aspire_docs").setup({
+  aspire_cmd = "aspire",
+  default_args = { "--non-interactive", "--nologo" },
+  preview_title = "Aspire Docs",
+  open_mode = "tab",
+})
+EOF
