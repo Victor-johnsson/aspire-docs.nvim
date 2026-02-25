@@ -52,3 +52,13 @@ vim.schedule(function()
     end
   end
 end)
+
+vim.api.nvim_create_user_command("AspireDocsIndexRefresh", function()
+  local ok = pcall(function()
+    vim.notify("AspireDocs: refreshing index...", vim.log.levels.INFO)
+    require("aspire_docs.util").build_remote_index_async()
+  end)
+  if not ok then
+    vim.notify("AspireDocs: failed to start index refresh", vim.log.levels.ERROR)
+  end
+end, {})
