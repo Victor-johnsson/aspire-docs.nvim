@@ -25,13 +25,90 @@ local function make_entry(item, opts)
 end
 
 local function open_doc_by_slug(slug, opts)
-  util.run_cmd({ "docs", "get", slug }, function(lines)
+  opts = opts or {}
+  local config = require("aspire_docs").config
+
+  -- If configured to use the GitHub/raw source, try it first
+  if config.source == "github_raw" or (config.local_repo_path and config.local_repo_path ~= "") then
+    -- try remote index lookup first
+    local index = util.load_remote_index()
+    if index and index[slug] then
+      -- fetch the exact file path from raw base
+      local url = config.github_raw_base
+      if url:sub(-1) ~= "/" then url = url .. "/" end
+      local fetched = vim.system({ "curl", "-fsSL", url .. index[slug] }, { text = true }):wait()
+      if fetched and fetched.code == 0 and fetched.stdout then
+        local lines = {}
+        for l in tostring(fetched.stdout):gmatch("[^\r\n]+") do lines[#lines+1] = l end
+        local cleaned = util.clean_doc_lines(lines)
+        util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
+        return
+      end
+    end
+
+    local fetched = util.fetch_doc(slug)
+    if fetched then
+      -- If the fetched doc looks like JSON (some raw files may still be wrapped), try to decode
+      local raw = table.concat(fetched, "\n")
+      local ok, data = pcall(vim.json.decode, raw)
+      if ok and type(data) == "table" and data.content then
+        local body = data.content
+        if tostring(body):match("<[^>]+>") then
+          body = util.strip_html(tostring(body))
+        end
+        local out_lines = {}
+        for line in tostring(body):gmatch("[^\r\n]+") do
+          out_lines[#out_lines + 1] = line
+        end
+        out_lines = util.clean_doc_lines(out_lines)
+        util.open_doc(out_lines, data.title or opts.preview_title or "Aspire Docs", opts.open_mode)
+        return
+      end
+
+      -- Otherwise assume it's the raw MDX/markdown content
+      local cleaned = util.clean_doc_lines(fetched)
+      util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
+      return
+    end
+  end
+
+  -- Fallback to CLI if fetching failed
+  util.run_cmd({ "docs", "get", slug, "--format", "Json" }, function(lines)
     local cleaned = util.clean_doc_lines(lines)
     util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
   end)
 end
 
 local function run_list(opts)
+  -- Prefer index-based listing when available
+  local index = util.load_remote_index()
+  if index then
+    local results = {}
+    for slug, path in pairs(index) do
+      results[#results + 1] = { title = util.humanize_slug(slug), slug = slug }
+    end
+
+    table.sort(results, function(a, b) return a.title < b.title end)
+
+    pickers.new(opts, {
+      prompt_title = "Aspire Docs (index)",
+      finder = finders.new_table({ results = results, entry_maker = function(item) return make_entry(item, opts) end }),
+      sorter = conf.generic_sorter(opts),
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          actions.close(prompt_bufnr)
+          local selection = action_state.get_selected_entry()
+          if selection and selection.value then
+            open_doc_by_slug(selection.value.slug, opts)
+          end
+        end)
+        return true
+      end,
+    }):find()
+    return
+  end
+
+  -- Fallback to CLI listing
   util.run_cmd({ "docs", "list" }, function(lines)
     local items = util.parse_docs_items(lines)
 

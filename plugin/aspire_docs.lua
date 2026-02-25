@@ -1,4 +1,5 @@
 local aspire_docs = require("aspire_docs")
+local util = require("aspire_docs.util")
 
 if not aspire_docs.config then
   aspire_docs.setup()
@@ -14,7 +15,40 @@ end, { nargs = 1 })
 
 vim.api.nvim_create_user_command("AspireDocsGet", function(opts)
   local slug = opts.args
-  require("aspire_docs.util").run_cmd({ "docs", "get", slug }, function(lines)
-    require("aspire_docs.util").open_doc(lines, "Aspire Docs", aspire_docs.config.open_mode)
+  local cfg = aspire_docs.config
+
+  -- Try configured fetch first (github_raw/local_repo)
+  if (cfg.source == "github_raw") or (cfg.local_repo_path and cfg.local_repo_path ~= "") then
+    vim.notify("AspireDocs: attempting to fetch '" .. slug .. "' from configured source...", vim.log.levels.INFO)
+    local fetched = util.fetch_doc(slug)
+    if fetched then
+      local cleaned = util.clean_doc_lines(fetched)
+      util.open_doc(cleaned, cfg.preview_title or "Aspire Docs", cfg.open_mode)
+      return
+    else
+      vim.notify("AspireDocs: fetch from source failed, falling back to Aspire CLI", vim.log.levels.WARN)
+    end
+  end
+
+  -- Fallback to Aspire CLI
+  vim.notify("AspireDocs: running 'aspire docs get " .. slug .. "'...", vim.log.levels.INFO)
+  util.run_cmd({ "docs", "get", slug }, function(lines)
+    util.open_doc(lines, cfg.preview_title or "Aspire Docs", cfg.open_mode)
+  end, function(err)
+    vim.notify("AspireDocs: failed to get doc: " .. tostring(err), vim.log.levels.ERROR)
   end)
 end, { nargs = 1 })
+
+-- Build remote index in background on startup when enabled and no fresh cache exists.
+vim.schedule(function()
+  local cfg = aspire_docs.config
+  if cfg and cfg.index and cfg.index.enabled and cfg.source == "github_raw" then
+    local ok, cached = pcall(function() return require("aspire_docs.util").get_cached_index() end)
+    if not ok or not cached then
+      -- start async build
+      pcall(function()
+        require("aspire_docs.util").build_remote_index_async()
+      end)
+    end
+  end
+end)
