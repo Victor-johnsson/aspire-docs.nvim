@@ -1,4 +1,6 @@
 local M = {}
+-- in-memory cache for fetched docs (per Neovim session)
+M._doc_cache = {}
 
 local function normalize_lines(output)
   local lines = {}
@@ -339,6 +341,11 @@ end
 function M.fetch_doc(slug)
   local config = require("aspire_docs").config
 
+  -- return cached copy if available
+  if M._doc_cache[slug] then
+    return M._doc_cache[slug]
+  end
+
   local function try_read_file(path)
     local f = io.open(path, "r")
     if not f then
@@ -388,13 +395,55 @@ function M.fetch_doc(slug)
       end
       url = url .. rel
       local result = vim.system({ "curl", "-fsSL", url }, { text = true }):wait()
-      if result and result.code == 0 and result.stdout and result.stdout ~= "" then
-        return normalize_lines(result.stdout)
+    if result and result.code == 0 and result.stdout and result.stdout ~= "" then
+        local lines = normalize_lines(result.stdout)
+        M._doc_cache[slug] = lines
+        -- persist normalized copy if enabled
+        pcall(function()
+          local cfg = require("aspire_docs").config
+          if cfg.doc_cache and cfg.doc_cache.enabled then
+            local cache_dir = cfg.doc_cache.dir
+            if not cache_dir or cache_dir == vim.NIL or cache_dir == "" then
+              cache_dir = vim.fn.stdpath("cache") .. "/aspire_docs_docs"
+            end
+            vim.fn.mkdir(cache_dir, "p")
+            local fname = cache_dir .. "/" .. slug:gsub("[/%s]", "_") .. ".md"
+            local f = io.open(fname, "w")
+            if f then
+              f:write(table.concat(lines, "\n"))
+              f:close()
+            end
+          end
+        end)
+        return lines
       end
     end
   end
 
   return nil
+end
+
+-- Try to read a persisted normalized doc from disk cache
+function M.read_persisted_doc(slug)
+  local cfg = require("aspire_docs").config
+  if not cfg.doc_cache or not cfg.doc_cache.enabled then return nil end
+  local cache_dir = cfg.doc_cache.dir
+  if not cache_dir or cache_dir == vim.NIL or cache_dir == "" then
+    cache_dir = vim.fn.stdpath("cache") .. "/aspire_docs_docs"
+  end
+  local fname = cache_dir .. "/" .. slug:gsub("[/%s]", "_") .. ".md"
+  local f = io.open(fname, "r")
+  if not f then return nil end
+  local content = f:read("*a")
+  f:close()
+  local lines = normalize_lines(content)
+  -- also populate in-memory cache
+  M._doc_cache[slug] = lines
+  return lines
+end
+
+function M.clear_doc_cache()
+  M._doc_cache = {}
 end
 
 -- Turn a slug like "app-host/eventing" or "app-host-eventing" into a readable title
@@ -840,6 +889,64 @@ function M.open_doc(lines, title, open_mode)
 
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.api.nvim_buf_set_option(buf, "modifiable", false)
+end
+
+
+-- Render a preview of the given markdown lines using configured renderer.
+-- Supported renderers:
+--  - glow: shell out to `glow` to render markdown in a terminal buffer
+--  - browser: write temp HTML using `marked` if available and open in $BROWSER
+function M.preview_doc(lines)
+  local config = require("aspire_docs").config
+  local renderer = config.preview_renderer or "glow"
+  local text = table.concat(lines, "\n")
+
+  if renderer == "none" then
+    vim.notify("AspireDocs: preview disabled (preview_renderer=none)", vim.log.levels.INFO)
+    return
+  end
+
+  if renderer == "glow" then
+    if vim.fn.executable("glow") == 0 then
+      vim.notify("AspireDocs: 'glow' not found in PATH", vim.log.levels.ERROR)
+      return
+    end
+    -- open a split and start a terminal there running glow reading from stdin
+    vim.cmd("split")
+    local term_buf = vim.api.nvim_get_current_buf()
+    local job = vim.fn.termopen({ "glow", "-s", "dark", "-" }, { cwd = vim.loop.cwd() })
+    if job and job > 0 then
+      -- send content to the terminal's stdin and close stdin
+      pcall(vim.fn.chansend, job, text)
+      pcall(vim.fn.chanclose, job, "stdin")
+      -- name the buffer (pcall to avoid errors)
+      pcall(vim.api.nvim_buf_set_name, term_buf, "AspireDocs Preview")
+      return
+    else
+      vim.notify("AspireDocs: failed to start 'glow' terminal", vim.log.levels.ERROR)
+    end
+  end
+
+  if renderer == "browser" then
+    -- Try to use 'marked' npm package if installed to convert md -> html
+    local tmp = vim.fn.tempname() .. ".md"
+    local f = io.open(tmp, "w")
+    if not f then
+      vim.notify("AspireDocs: failed to write temp file for preview", vim.log.levels.ERROR)
+      return
+    end
+    f:write(text)
+    f:close()
+    local htmltmp = tmp .. ".html"
+    local res = vim.system({ "marked", tmp, "-o", htmltmp }, { text = true }):wait()
+    if res and res.code == 0 then
+      local open_cmd = os.getenv("BROWSER") or "open"
+      vim.system({ open_cmd, htmltmp }, { text = true })
+      return
+    else
+      vim.notify("AspireDocs: failed to render HTML (marked missing?)", vim.log.levels.ERROR)
+    end
+  end
 end
 
 return M

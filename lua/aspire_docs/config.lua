@@ -19,6 +19,14 @@ M.defaults = {
     ttl_seconds = 24 * 60 * 60, -- 1 day
     cache_file = nil, -- defaults to stdpath('cache')/aspire_docs_index.json
   },
+  -- preview renderer: "glow" | "browser" | "none"
+  preview_renderer = "glow",
+  -- persistent normalized doc cache
+  doc_cache = {
+    enabled = true,
+    -- optional explicit directory; defaults to stdpath('cache')/aspire_docs_docs
+    dir = nil,
+  },
 }
 
 return M
