@@ -167,8 +167,24 @@ local function run_list(opts)
   -- Prefer index-based listing when available
   local index = util.load_remote_index()
   if index then
+    -- index may contain multiple slug keys mapping to the same underlying
+    -- file path (e.g. both `foo/bar` and `foo-bar` map to the same file).
+    -- Deduplicate by the path and prefer the slash-form when available so
+    -- we don't show duplicate entries in the list.
     local results = {}
+    local seen = {}
     for slug, path in pairs(index) do
+      if not seen[path] then
+        seen[path] = slug
+      else
+        local prev = seen[path]
+        -- prefer the slash variant (contains '/') over a dash-joined one
+        if (not prev:match("/")) and slug:match("/") then
+          seen[path] = slug
+        end
+      end
+    end
+    for _, slug in pairs(seen) do
       results[#results + 1] = { title = util.humanize_slug(slug), slug = slug }
     end
 

@@ -62,3 +62,17 @@ vim.api.nvim_create_user_command("AspireDocsIndexRefresh", function()
     vim.notify("AspireDocs: failed to start index refresh", vim.log.levels.ERROR)
   end
 end, {})
+
+vim.api.nvim_create_user_command("AspireDocsIndexClear", function()
+  local ok, err = pcall(function()
+    local success, msg_or_err = require("aspire_docs.util").clear_index_cache()
+    if success then
+      vim.notify("AspireDocs: cleared index cache", vim.log.levels.INFO)
+    else
+      vim.notify("AspireDocs: failed to clear index cache: " .. tostring(msg_or_err), vim.log.levels.WARN)
+    end
+  end)
+  if not ok then
+    vim.notify("AspireDocs: error while clearing index cache", vim.log.levels.ERROR)
+  end
+end, {})

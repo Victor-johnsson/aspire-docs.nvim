@@ -10,6 +10,26 @@ local function normalize_lines(output)
   return lines
 end
 
+-- Clear the persisted remote index cache file (if any).
+function M.clear_index_cache()
+  local cfg = require("aspire_docs").config
+  if not cfg or not cfg.index or not cfg.index.enabled then
+    return false, "index disabled in config"
+  end
+  local cache_file = cfg.index.cache_file
+  if not cache_file or cache_file == vim.NIL then
+    cache_file = vim.fn.stdpath("cache") .. "/aspire_docs_index.json"
+  end
+  local ok, err = pcall(function()
+    -- os.remove returns nil+errmsg on failure; wrap in pcall to be safe
+    os.remove(cache_file)
+  end)
+  if not ok then
+    return false, tostring(err)
+  end
+  return true
+end
+
 local function trim(value)
   return (value:gsub("^%s+", ""):gsub("%s+$", ""))
 end
@@ -519,11 +539,16 @@ function M.load_remote_index()
         -- only consider docs subtree
         if path:match("^src/frontend/src/content/docs/") then
           local rel = path:gsub("^src/frontend/src/content/docs/", "")
-          local base = rel:gsub("%.mdx$", ""):gsub("%.md$", "")
-          index[base] = rel
-          -- also map dash-joined slug
-          local dash = base:gsub("/", "-")
-          index[dash] = rel
+          -- skip localized variants (e.g. "ja/...", "pt-br/...") — only keep
+          -- the default English (non-localized) docs which live at the root
+          local first = rel:match("^([^/]+)")
+          if not (first and (first:match("^[a-z][a-z]$") or first:match("^[a-z][a-z]%-[a-z][a-z]$"))) then
+            local base = rel:gsub("%.mdx$", ""):gsub("%.md$", "")
+            index[base] = rel
+            -- also map dash-joined slug
+            local dash = base:gsub("/", "-")
+            index[dash] = rel
+          end
         end
       end
     end
@@ -625,9 +650,14 @@ function M.build_remote_index_async()
           if entry.path:match("%.mdx$") or entry.path:match("%.md$") then
             if entry.path:match("^src/frontend/src/content/docs/") then
               local rel = entry.path:gsub("^src/frontend/src/content/docs/", "")
-              local base = rel:gsub("%.mdx$", ""):gsub("%.md$", "")
-              index[base] = rel
-              index[base:gsub("/", "-")] = rel
+              -- skip localized variants (e.g. "ja/...", "pt-br/...") — only keep
+              -- the default English (non-localized) docs which live at the root
+              local first = rel:match("^([^/]+)")
+              if not (first and (first:match("^[a-z][a-z]$") or first:match("^[a-z][a-z]%-[a-z][a-z]$"))) then
+                local base = rel:gsub("%.mdx$", ""):gsub("%.md$", "")
+                index[base] = rel
+                index[base:gsub("/", "-")] = rel
+              end
             end
           end
         end
