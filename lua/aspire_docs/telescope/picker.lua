@@ -43,10 +43,6 @@ local function open_doc_by_slug(slug, opts)
         for l in tostring(fetched.stdout):gmatch("[^\r\n]+") do lines[#lines+1] = l end
         local cleaned = util.clean_doc_lines(lines)
         util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
-        -- open preview if requested
-        if (opts and opts.preview) or require("aspire_docs").config.preview_renderer ~= "none" then
-          pcall(function() require("aspire_docs.util").preview_doc(cleaned) end)
-        end
         return
       end
     end
@@ -72,10 +68,7 @@ local function open_doc_by_slug(slug, opts)
 
       -- Otherwise assume it's the raw MDX/markdown content
       local cleaned = util.clean_doc_lines(fetched)
-      util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
-      if (opts and opts.preview) or require("aspire_docs").config.preview_renderer ~= "none" then
-        pcall(function() require("aspire_docs.util").preview_doc(cleaned) end)
-      end
+        util.open_doc(cleaned, opts.preview_title or "Aspire Docs", opts.open_mode)
       return
     end
   end

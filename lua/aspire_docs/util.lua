@@ -924,37 +924,15 @@ end
 
 -- Render a preview of the given markdown lines using configured renderer.
 -- Supported renderers:
---  - glow: shell out to `glow` to render markdown in a terminal buffer
+--  - glow: (removed) was previously used to render markdown in a terminal buffer
 --  - browser: write temp HTML using `marked` if available and open in $BROWSER
 function M.preview_doc(lines)
   local config = require("aspire_docs").config
-  local renderer = config.preview_renderer or "glow"
+  local renderer = config.preview_renderer or "browser"
   local text = table.concat(lines, "\n")
-
   if renderer == "none" then
     vim.notify("AspireDocs: preview disabled (preview_renderer=none)", vim.log.levels.INFO)
     return
-  end
-
-  if renderer == "glow" then
-    if vim.fn.executable("glow") == 0 then
-      vim.notify("AspireDocs: 'glow' not found in PATH", vim.log.levels.ERROR)
-      return
-    end
-    -- open a split and start a terminal there running glow reading from stdin
-    vim.cmd("split")
-    local term_buf = vim.api.nvim_get_current_buf()
-    local job = vim.fn.termopen({ "glow", "-s", "dark", "-" }, { cwd = vim.loop.cwd() })
-    if job and job > 0 then
-      -- send content to the terminal's stdin and close stdin
-      pcall(vim.fn.chansend, job, text)
-      pcall(vim.fn.chanclose, job, "stdin")
-      -- name the buffer (pcall to avoid errors)
-      pcall(vim.api.nvim_buf_set_name, term_buf, "AspireDocs Preview")
-      return
-    else
-      vim.notify("AspireDocs: failed to start 'glow' terminal", vim.log.levels.ERROR)
-    end
   end
 
   if renderer == "browser" then
@@ -976,7 +954,12 @@ function M.preview_doc(lines)
     else
       vim.notify("AspireDocs: failed to render HTML (marked missing?)", vim.log.levels.ERROR)
     end
+    return
   end
+
+  -- external preview removed; telescope previewer is used for inline previews
+  vim.notify("AspireDocs: external preview is disabled; use Telescope preview", vim.log.levels.WARN)
+  return
 end
 
 return M
